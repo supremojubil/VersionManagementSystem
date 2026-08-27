@@ -83,8 +83,7 @@ namespace VersionManagementSystem.Core.Services {
             return await BuildDtoAsync(entity, applicationCode);
         }
 
-        public async Task<IReadOnlyList<ReleaseNoteDTO>> AddReleaseNotesAsync(
-            string applicationCode, string version, IReadOnlyList<CreateReleaseNoteDTO> releaseNotes) {
+        public async Task<IReadOnlyList<ReleaseNoteDTO>> AddReleaseNotesAsync(string applicationCode, string version, IReadOnlyList<CreateReleaseNoteDTO> releaseNotes) {
             if (releaseNotes.Count == 0) {
                 throw new ValidationException("At least one release note is required.");
             }
@@ -130,17 +129,17 @@ namespace VersionManagementSystem.Core.Services {
 
         private async Task<ApplicationVersion> GetVersionOrThrowAsync(string applicationCode, string version) {
             var application = await _applicationRepository.GetByCodeAsync(applicationCode);
-            if (application is null) {
+            if (application == null) {
                 throw new NotFoundException($"Application '{applicationCode}' was not found.");
             }
 
-            if (!SemanticVersion.TryParse(version, out var semanticVersion) || semanticVersion is null) {
+            if (!SemanticVersion.TryParse(version, out var semanticVersion) || semanticVersion == null) {
                 throw new ValidationException($"'{version}' is not a valid version.");
             }
 
             var entity = await _versionRepository.GetByVersionAsync(application.ApplicationId, semanticVersion.Major, semanticVersion.Minor, semanticVersion.Patch);
 
-            if (entity is null) {
+            if (entity == null) {
                 throw new NotFoundException($"Version {semanticVersion} was not found for application '{applicationCode}'.");
             }
 
@@ -162,6 +161,7 @@ namespace VersionManagementSystem.Core.Services {
                 ReleaseNotes = entity.ReleaseNotes,
                 MinimumSupportedVersion = entity.MinimumSupportedVersion,
                 IsMandatory = entity.IsMandatory,
+                Channel = entity.Channel.ToString(),
                 CreatedDate = entity.CreatedDate,
                 CreatedBy = entity.CreatedBy,
                 PublishedDate = entity.PublishedDate,

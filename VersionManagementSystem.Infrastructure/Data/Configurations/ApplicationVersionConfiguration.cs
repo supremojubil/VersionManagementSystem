@@ -39,6 +39,11 @@ namespace VersionManagementSystem.Infrastructure.Data.Configurations {
 
             builder.Property(v => v.PublishedBy).HasMaxLength(200);
 
+            builder.Property(v => v.Channel)
+                .IsRequired()
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
             // One application cannot register the same MAJOR.MINOR.PATCH twice.
             builder.HasIndex(v => new { 
                 v.ApplicationId, 

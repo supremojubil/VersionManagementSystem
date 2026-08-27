@@ -14,6 +14,7 @@ namespace VersionManagementSystem.Core.DTOs {
         public string? ReleaseNotes { get; set; }
         public string? MinimumSupportedVersion { get; set; }
         public bool IsMandatory { get; set; }
+        public string Channel { get; set; } = "Stable";
         public DateTime CreatedDate { get; set; }
         public string? CreatedBy { get; set; }
         public DateTime? PublishedDate { get; set; }
@@ -34,6 +35,7 @@ namespace VersionManagementSystem.Core.DTOs {
         public string? ReleaseNotes { get; set; }
         public string? MinimumSupportedVersion { get; set; }
         public bool IsMandatory { get; set; }
+        public string Channel { get; set; } = "Stable";
         public string? CreatedBy { get; set; }
     }
 }

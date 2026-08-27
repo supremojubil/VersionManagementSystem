@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using VersionManagementSystem.Core.DTOs;
 using VersionManagementSystem.Core.Entities;
@@ -51,7 +52,7 @@ namespace VersionManagementSystem.Core.Services {
             var application = await GetApplicationOrThrowAsync(applicationCode);
             var latest = await _versionRepository.GetLatestAsync(application.ApplicationId);
 
-            if (latest is null) {
+            if (latest == null) {
                 throw new NotFoundException($"Application '{applicationCode}' has no registered versions yet.");
             }
 
@@ -72,7 +73,7 @@ namespace VersionManagementSystem.Core.Services {
             }
 
             var latest = await _versionRepository.GetLatestAsync(application.ApplicationId);
-            if (latest is not null) {
+            if (latest != null) {
                 var latestVersion = new Models.SemanticVersion(latest.Major, latest.Minor, latest.Patch);
                 if (!semanticVersion.IsNewerThan(latestVersion)) {
                     throw new ValidationException($"New version {semanticVersion} must be newer than the current latest version {latestVersion}.");
@@ -82,6 +83,10 @@ namespace VersionManagementSystem.Core.Services {
             if (!string.IsNullOrWhiteSpace(request.MinimumSupportedVersion) &&
                 !_versionService.TryParse(request.MinimumSupportedVersion, out _)) {
                 throw new ValidationException($"'{request.MinimumSupportedVersion}' is not a valid minimum supported version.");
+            }
+
+            if (!Enum.TryParse<UpdateChannel>(request.Channel, ignoreCase: true, out var channel)) {
+                throw new ValidationException($"'{request.Channel}' is not a valid channel. Expected Stable, Beta or Development.");
             }
 
             var version = new ApplicationVersion {
@@ -95,6 +100,7 @@ namespace VersionManagementSystem.Core.Services {
                 ReleaseNotes = request.ReleaseNotes,
                 MinimumSupportedVersion = request.MinimumSupportedVersion,
                 IsMandatory = request.IsMandatory,
+                Channel = channel,
                 CreatedDate = DateTime.UtcNow,
                 CreatedBy = request.CreatedBy
             };
@@ -107,7 +113,7 @@ namespace VersionManagementSystem.Core.Services {
 
         private async Task<Application> GetApplicationOrThrowAsync(string applicationCode) {
             var application = await _applicationRepository.GetByCodeAsync(applicationCode);
-            if (application is null) {
+            if (application == null) {
                 throw new NotFoundException($"Application '{applicationCode}' was not found.");
             }
 
@@ -129,6 +135,7 @@ namespace VersionManagementSystem.Core.Services {
                 ReleaseNotes = version.ReleaseNotes,
                 MinimumSupportedVersion = version.MinimumSupportedVersion,
                 IsMandatory = version.IsMandatory,
+                Channel = version.Channel.ToString(),
                 CreatedDate = version.CreatedDate,
                 CreatedBy = version.CreatedBy,
                 PublishedDate = version.PublishedDate,

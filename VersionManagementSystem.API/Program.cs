@@ -12,7 +12,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Database — Pomelo/MySQL provider (matches the MySQL infrastructure already used at BENPOS).
+// Database — Pomelo/MySQL provider (matches the MySQL infrastructure already used).
 // Swap AddDbContext's UseMySql call for UseSqlServer if the target environment uses SQL Server instead.
 var connectionString = builder.Configuration.GetConnectionString("VersionManagementDb") ?? throw new InvalidOperationException("Connection string 'VersionManagementDb' was not found.");
 
@@ -23,6 +23,8 @@ builder.Services.AddScoped<IApplicationRepository, ApplicationRepository>();
 builder.Services.AddScoped<IApplicationVersionRepository, ApplicationVersionRepository>();
 builder.Services.AddScoped<IReleaseNoteRepository, ReleaseNoteRepository>();
 builder.Services.AddScoped<IUpdatePackageRepository, UpdatePackageRepository>();
+builder.Services.AddScoped<IClientInstallationRepository, ClientInstallationRepository>();
+builder.Services.AddScoped<IUpdateHistoryRepository, UpdateHistoryRepository>();
 
 // Package storage — local disk under PackageStorage:RootPath (see appsettings.json).
 builder.Services.Configure<PackageStorageOptions>(builder.Configuration.GetSection("PackageStorage"));
@@ -35,6 +37,9 @@ builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<IApplicationVersionService, ApplicationVersionService>();
 builder.Services.AddScoped<IReleaseService, ReleaseService>();
 builder.Services.AddScoped<IPackageService, PackageService>();
+builder.Services.AddScoped<IClientTrackingService, ClientTrackingService>();
+builder.Services.AddScoped<IUpdateCheckService, UpdateCheckService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // Large update packages (installers) can exceed ASP.NET Core's default 30 MB multipart body limit.
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options => {

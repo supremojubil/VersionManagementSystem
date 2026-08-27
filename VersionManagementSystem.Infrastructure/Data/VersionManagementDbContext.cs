@@ -16,11 +16,17 @@ namespace VersionManagementSystem.Infrastructure.Data {
 
         public DbSet<UpdatePackage> UpdatePackages => Set<UpdatePackage>();
 
+        public DbSet<ClientInstallation> ClientInstallations => Set<ClientInstallation>();
+
+        public DbSet<UpdateHistory> UpdateHistories => Set<UpdateHistory>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder) {
             modelBuilder.ApplyConfiguration(new ApplicationConfiguration());
             modelBuilder.ApplyConfiguration(new ApplicationVersionConfiguration());
             modelBuilder.ApplyConfiguration(new ReleaseNoteConfiguration());
             modelBuilder.ApplyConfiguration(new UpdatePackageConfiguration());
+            modelBuilder.ApplyConfiguration(new ClientInstallationConfiguration());
+            modelBuilder.ApplyConfiguration(new UpdateHistoryConfiguration());
 
             base.OnModelCreating(modelBuilder);
         }

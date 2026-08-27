@@ -32,6 +32,8 @@ namespace VersionManagementSystem.Core.Entities {
 
         public bool IsMandatory { get; set; }
 
+        public UpdateChannel Channel { get; set; } = UpdateChannel.Stable;
+
         public DateTime CreatedDate { get; set; }
 
         public string? CreatedBy { get; set; }
