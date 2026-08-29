@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<UseWindowsForms>true</UseWindowsForms>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<RootNamespace>VersionManagementSystem.Admin</RootNamespace>
+		<AssemblyName>VersionManagementSystem.Admin</AssemblyName>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Only for the DashboardSummaryDto shape — this app is a thin REST client, not a full
+         admin backend; it never touches Infrastructure/EF Core directly. -->
+		<ProjectReference Include="..\VersionManagementSystem.Core\VersionManagementSystem.Core.csproj" />
+	</ItemGroup>
+
+</Project>
