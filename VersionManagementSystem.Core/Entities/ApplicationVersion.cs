@@ -19,6 +19,7 @@ namespace VersionManagementSystem.Core.Entities {
         public int Major { get; set; }
         public int Minor { get; set; }
         public int Patch { get; set; }
+        public int Revision { get; set; }
 
         public ReleaseType ReleaseType { get; set; }
 
@@ -42,7 +43,7 @@ namespace VersionManagementSystem.Core.Entities {
 
         public string? PublishedBy { get; set; }
 
-        public string VersionString => $"{Major}.{Minor}.{Patch}";
+        public string VersionString => new Version(Major, Minor, Patch, Revision).ToString(4);
 
         public ICollection<ReleaseNote> StructuredReleaseNotes { get; set; } = new List<ReleaseNote>();
 

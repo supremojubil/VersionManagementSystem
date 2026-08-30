@@ -11,12 +11,12 @@ namespace VersionManagementSystem.Core.Interfaces {
 
         Task<ApplicationVersion?> GetLatestAsync(int applicationId);
 
-        /// <summary>Latest version with ReleaseStatus.Published on the given channel — what update-check clients see.</summary>
+        /// <summary>Latest version with ReleaseStatus.Published on the given channel Â— what update-check clients see.</summary>
         Task<ApplicationVersion?> GetLatestPublishedAsync(int applicationId, UpdateChannel channel);
 
-        Task<ApplicationVersion?> GetByVersionAsync(int applicationId, int major, int minor, int patch);
+        Task<ApplicationVersion?> GetByVersionAsync(int applicationId, int major, int minor, int patch, int revision);
 
-        Task<bool> VersionExistsAsync(int applicationId, int major, int minor, int patch);
+        Task<bool> VersionExistsAsync(int applicationId, int major, int minor, int patch, int revision);
 
         Task<int> CountPublishedAsync();
 

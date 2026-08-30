@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using VersionManagementSystem.Core.DTOs;
 using VersionManagementSystem.Core.Enums;
 using VersionManagementSystem.Core.Exceptions;
@@ -15,7 +15,7 @@ namespace VersionManagementSystem.API.Controllers {
             _clientTrackingService = clientTrackingService;
         }
 
-        // GET /api/update/check?application=FJ&version=1.4.0&channel=Stable&machineName=WKSTN-01
+        // GET /api/update/check?application=FJ&version=2026.8.26.1&channel=Stable&machineName=WKSTN-01
         [HttpGet("check")]
         public async Task<IActionResult> Check([FromQuery] string application, [FromQuery] string version, [FromQuery] string channel = "Stable", [FromQuery] string? machineName = null) {
             if (string.IsNullOrWhiteSpace(application) || string.IsNullOrWhiteSpace(version)) {

@@ -9,7 +9,7 @@ namespace VersionManagementSystem.Admin {
 
             // First arg lets an operator point the dashboard at a non-default API instance;
             // defaults to the typical local dev address.
-            var apiBaseUrl = args.Length > 0 ? args[0] : "https://localhost:5001/api";
+            var apiBaseUrl = args.Length > 0 ? args[0] : "https://localhost:60089/api";
 
             Application.Run(new DashboardForm(apiBaseUrl));
         }

@@ -28,15 +28,16 @@ namespace VersionManagementSystem.Infrastructure.Repositories {
                 .OrderByDescending(c => c.Major)
                 .ThenByDescending(c => c.Minor)
                 .ThenByDescending(c => c.Patch)
+                .ThenByDescending(c => c.Revision)
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<ApplicationVersion?> GetByVersionAsync(int applicationId, int major, int minor, int patch) {
-            return await _context.ApplicationVersions.FirstOrDefaultAsync(c => c.ApplicationId == applicationId && c.Major == major && c.Minor == minor && c.Patch == patch);
+        public async Task<ApplicationVersion?> GetByVersionAsync(int applicationId, int major, int minor, int patch, int revision) {
+            return await _context.ApplicationVersions.FirstOrDefaultAsync(c => c.ApplicationId == applicationId && c.Major == major && c.Minor == minor && c.Patch == patch && c.Revision == revision);
         }
 
-        public async Task<bool> VersionExistsAsync(int applicationId, int major, int minor, int patch) {
-            return await _context.ApplicationVersions.AnyAsync(c => c.ApplicationId == applicationId && c.Major == major && c.Minor == minor && c.Patch == patch);
+        public async Task<bool> VersionExistsAsync(int applicationId, int major, int minor, int patch, int revision) {
+            return await _context.ApplicationVersions.AnyAsync(c => c.ApplicationId == applicationId && c.Major == major && c.Minor == minor && c.Patch == patch && c.Revision == revision);
         }
 
         public async Task AddAsync(ApplicationVersion version) {
@@ -57,6 +58,7 @@ namespace VersionManagementSystem.Infrastructure.Repositories {
                                 .OrderByDescending(c => c.Major)
                                 .ThenByDescending(c => c.Minor)
                                 .ThenByDescending(c => c.Patch)
+                                .ThenByDescending(c => c.Revision)
                                 .FirstOrDefaultAsync();
         }
         public async Task<int> CountPublishedAsync() {

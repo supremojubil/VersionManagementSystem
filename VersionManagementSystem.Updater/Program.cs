@@ -1,7 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using VersionManagementSystem.Client;
@@ -35,6 +37,34 @@ namespace VersionManagementSystem.Updater {
             var toVersion = options["to-version"];
             var mainExePath = options["main-exe"];
 
+            if (!Version.TryParse(fromVersion, out var parsedFromVersion) || parsedFromVersion is null || parsedFromVersion.Build < 0 || parsedFromVersion.Revision < 0 ||
+                !Version.TryParse(toVersion, out var parsedToVersion) || parsedToVersion is null || parsedToVersion.Build < 0 || parsedToVersion.Revision < 0) {
+                Console.Error.WriteLine("'--from-version' and '--to-version' must be complete four-part .NET versions such as 2026.8.26.1.");
+                return 1;
+            }
+
+            if (parsedToVersion.CompareTo(parsedFromVersion) <= 0) {
+                Console.Error.WriteLine($"Target version {parsedToVersion.ToString(4)} must be newer than source version {parsedFromVersion.ToString(4)}.");
+                return 1;
+            }
+
+            if (!File.Exists(mainExePath)) {
+                Console.Error.WriteLine($"Main executable was not found: {mainExePath}");
+                return 1;
+            }
+
+            try {
+                var installedAssemblyVersion = AssemblyName.GetAssemblyName(mainExePath).Version;
+                if (installedAssemblyVersion is null || installedAssemblyVersion.CompareTo(parsedFromVersion) != 0) {
+                    Console.Error.WriteLine($"Installed executable version {installedAssemblyVersion?.ToString(4) ?? "unknown"} does not match --from-version {parsedFromVersion.ToString(4)}.");
+                    return 1;
+                }
+            }
+            catch (Exception ex) {
+                Console.Error.WriteLine($"Could not read AssemblyVersion from '{mainExePath}': {ex.Message}");
+                return 1;
+            }
+
             if (!Enum.TryParse<PackageType>(options["package-type"], ignoreCase: true, out var packageType)) {
                 Console.Error.WriteLine($"'{options["package-type"]}' is not a valid package type (Zip, Exe, Msi).");
                 return 1;
@@ -59,8 +89,8 @@ namespace VersionManagementSystem.Updater {
                     throw new InvalidOperationException("The installer reported a non-zero exit code.");
                 }
 
-                Console.WriteLine("Verifying installation...");
-                var verified = await installationService.VerifyInstallationAsync(installPath);
+                Console.WriteLine("Verifying installation AssemblyVersion...");
+                var verified = await installationService.VerifyInstallationAsync(installPath, mainExePath, parsedToVersion.ToString(4));
 
                 if (!verified) {
                     throw new InvalidOperationException("Post-install verification failed.");
@@ -156,6 +186,7 @@ namespace VersionManagementSystem.Updater {
             Console.Error.WriteLine("Usage: VersionManagementSystem.Updater.exe --app <code> --install-path <path>");
             Console.Error.WriteLine("  --package <file> --package-type <Zip|Exe|Msi> --from-version <v> --to-version <v>");
             Console.Error.WriteLine("  --main-exe <path> [--wait-pid <pid>] [--server <baseUrl>]");
+            Console.Error.WriteLine("  Versions use .NET AssemblyVersion format: Major.Minor.Build.Revision (e.g. 2026.8.26.1).");
         }
     }
 }

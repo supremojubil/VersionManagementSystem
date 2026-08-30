@@ -1,14 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using VersionManagementSystem.Core.DTOs;
 using VersionManagementSystem.Core.Entities;
 using VersionManagementSystem.Core.Enums;
 using VersionManagementSystem.Core.Exceptions;
 using VersionManagementSystem.Core.Interfaces;
-using VersionManagementSystem.Core.Models;
 
 namespace VersionManagementSystem.Core.Services {
     public sealed class UpdateCheckService : IUpdateCheckService {
@@ -32,7 +30,7 @@ namespace VersionManagementSystem.Core.Services {
             var current = _versionService.Parse(currentVersion);
 
             if (!string.IsNullOrWhiteSpace(machineName)) {
-                await _clientTrackingService.RecordCheckInAsync(applicationCode, machineName, current.ToString());
+                await _clientTrackingService.RecordCheckInAsync(applicationCode, machineName, current.ToString(4));
             }
 
             var latestPublished = await _versionRepository.GetLatestPublishedAsync(application.ApplicationId, channel);
@@ -40,29 +38,32 @@ namespace VersionManagementSystem.Core.Services {
             if (latestPublished is null) {
                 return new UpdateCheckResultDTO {
                     UpdateAvailable = false,
-                    CurrentVersion = current.ToString(),
-                    LatestVersion = current.ToString(),
+                    CurrentVersion = current.ToString(4),
+                    LatestVersion = current.ToString(4),
                     Mandatory = false
                 };
             }
 
-            var latest = new SemanticVersion(latestPublished.Major, latestPublished.Minor, latestPublished.Patch);
-            var updateAvailable = current.IsOlderThan(latest);
-
+            var latest = new Version(latestPublished.Major, latestPublished.Minor, latestPublished.Patch, latestPublished.Revision);
+            var updateAvailable = current.CompareTo(latest) < 0;
             var mandatory = latestPublished.IsMandatory;
-            if (!mandatory
-                && !string.IsNullOrWhiteSpace(latestPublished.MinimumSupportedVersion)
-                && _versionService.TryParse(latestPublished.MinimumSupportedVersion, out var minSupported)
-                && minSupported is not null) {
-                mandatory = current.IsOlderThan(minSupported);
+
+            if (!mandatory && !string.IsNullOrWhiteSpace(latestPublished.MinimumSupportedVersion) &&
+                _versionService.TryParse(latestPublished.MinimumSupportedVersion, out var minSupported) && minSupported is not null) {
+                mandatory = current.CompareTo(minSupported) < 0;
             }
+
+            var package = updateAvailable ? await GetPreferredPackageAsync(latestPublished) : null;
 
             return new UpdateCheckResultDTO {
                 UpdateAvailable = updateAvailable,
-                CurrentVersion = current.ToString(),
-                LatestVersion = latest.ToString(),
+                CurrentVersion = current.ToString(4),
+                LatestVersion = latest.ToString(4),
                 ReleaseType = latestPublished.ReleaseType.ToString(),
-                DownloadUrl = updateAvailable ? await BuildDownloadUrlAsync(latestPublished) : null,
+                DownloadUrl = package is null ? null : $"/api/packages/{package.UpdatePackageId}/download",
+                Checksum = package?.Checksum,
+                PackageType = package?.PackageType.ToString(),
+                FileSize = package?.FileSize,
                 ReleaseNotes = latestPublished.ReleaseNotes,
                 Mandatory = mandatory
             };
@@ -77,26 +78,28 @@ namespace VersionManagementSystem.Core.Services {
                     $"Application '{applicationCode}' has no published versions on the '{channel}' channel.");
             }
 
+            var package = await GetPreferredPackageAsync(latestPublished);
+
             return new UpdateCheckResultDTO {
                 UpdateAvailable = true,
                 CurrentVersion = string.Empty,
                 LatestVersion = latestPublished.VersionString,
                 ReleaseType = latestPublished.ReleaseType.ToString(),
-                DownloadUrl = await BuildDownloadUrlAsync(latestPublished),
+                DownloadUrl = package is null ? null : $"/api/packages/{package.UpdatePackageId}/download",
+                Checksum = package?.Checksum,
+                PackageType = package?.PackageType.ToString(),
+                FileSize = package?.FileSize,
                 ReleaseNotes = latestPublished.ReleaseNotes,
                 Mandatory = latestPublished.IsMandatory
             };
         }
 
-        /// <summary>Prefers an installer package (Msi/Exe) over a raw Zip when several package types exist.</summary>
-        private async Task<string?> BuildDownloadUrlAsync(ApplicationVersion version) {
+        private async Task<UpdatePackage?> GetPreferredPackageAsync(ApplicationVersion version) {
             var packages = await _packageRepository.GetByApplicationVersionIdAsync(version.ApplicationVersionId);
 
-            var preferred = packages.FirstOrDefault(p => p.PackageType == PackageType.Msi)
+            return packages.FirstOrDefault(p => p.PackageType == PackageType.Msi)
                 ?? packages.FirstOrDefault(p => p.PackageType == PackageType.Exe)
                 ?? packages.FirstOrDefault(p => p.PackageType == PackageType.Zip);
-
-            return preferred is null ? null : $"/api/packages/{preferred.UpdatePackageId}/download";
         }
 
         private async Task<Application> GetApplicationOrThrowAsync(string applicationCode) {

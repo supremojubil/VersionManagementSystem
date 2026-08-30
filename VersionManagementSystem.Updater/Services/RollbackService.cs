@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,7 +41,6 @@ namespace VersionManagementSystem.Updater.Services {
             var manifestPath = Path.Combine(backupFolder, ManifestFileName);
             var manifestJson = JsonSerializer.Serialize(manifest);
             await File.WriteAllTextAsync(manifestPath, manifestJson, cancellationToken);
-
             return backupFolder;
         }
 
@@ -56,22 +54,44 @@ namespace VersionManagementSystem.Updater.Services {
 
             var manifestJson = await File.ReadAllTextAsync(manifestPath, cancellationToken);
             var manifest = JsonSerializer.Deserialize<List<string>>(manifestJson) ?? new List<string>();
+            var allowed = new HashSet<string>(manifest.Select(NormalizeRelativePath), StringComparer.OrdinalIgnoreCase);
+            var installFullPath = Path.GetFullPath(installPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
-            Directory.CreateDirectory(installPath);
+            // Remove files created by the failed/new version that did not exist in the backup.
+            foreach (var currentFile in Directory.Exists(installPath)
+                ? Directory.EnumerateFiles(installPath, "*", SearchOption.AllDirectories).ToList()
+                : new List<string>()) {
+                cancellationToken.ThrowIfCancellationRequested();
+                var relativePath = Path.GetRelativePath(installPath, currentFile);
+                if (!allowed.Contains(NormalizeRelativePath(relativePath))) {
+                    File.Delete(currentFile);
+                }
+            }
 
             foreach (var relativePath in manifest) {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var sourceFile = Path.Combine(backupFolder, relativePath);
-                var destinationFile = Path.Combine(installPath, relativePath);
+                var normalized = NormalizeRelativePath(relativePath);
+                var destinationFile = Path.GetFullPath(Path.Combine(installPath, normalized));
+                if (!destinationFile.StartsWith(installFullPath, StringComparison.OrdinalIgnoreCase)) {
+                    throw new InvalidDataException($"Backup manifest contains an unsafe path '{relativePath}'.");
+                }
+
+                var sourceFile = Path.GetFullPath(Path.Combine(backupFolder, normalized));
+                var backupFullPath = Path.GetFullPath(backupFolder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                if (!sourceFile.StartsWith(backupFullPath, StringComparison.OrdinalIgnoreCase)) {
+                    throw new InvalidDataException($"Backup manifest contains an unsafe path '{relativePath}'.");
+                }
 
                 if (!File.Exists(sourceFile)) {
-                    continue; // manifest entry without a matching backup file — skip rather than fail the whole rollback
+                    throw new FileNotFoundException($"Backup file for '{relativePath}' is missing.", sourceFile);
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(destinationFile)!);
                 File.Copy(sourceFile, destinationFile, overwrite: true);
             }
         }
+
+        private static string NormalizeRelativePath(string path) => path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
     }
 }

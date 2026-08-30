@@ -1,59 +1,34 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using VersionManagementSystem.Core.Models;
 
 namespace VersionManagementSystem.PublishTool {
     /// <summary>
-    /// VersionManagementSystem.PublishTool.exe
-    ///
-    /// Turns "register a version, upload a package, walk it through the workflow" — several
-    /// manual Swagger calls — into one command. The version number is never typed by hand:
-    /// it's read either from the compiled exe/dll's file-version metadata (which is exactly
-    /// what AssemblyInfo.cs's [assembly: AssemblyFileVersion(...)] produces at build time), or,
-    /// if you'd rather not build first, parsed directly out of an AssemblyInfo.cs source file.
-    ///
-    /// Examples:
-    ///
-    ///   Read the version from the built exe, zip the whole Release folder, upload and publish:
-    ///     VersionManagementSystem.PublishTool.exe
-    ///       --app FJD
-    ///       --bin-path "C:\Projects\FelysJewelryDesktop\bin\Release\net8.0-windows"
-    ///       --main-exe FelysJewelryDesktop.exe
-    ///       --server https://localhost:5001/api
-    ///       --release-notes "Bug fixes and improvements"
-    ///       --publish
-    ///
-    ///   Read the version from AssemblyInfo.cs instead of a built binary:
-    ///     VersionManagementSystem.PublishTool.exe
-    ///       --app FJD
-    ///       --bin-path "C:\Projects\FelysJewelryDesktop\bin\Release\net8.0-windows"
-    ///       --assembly-info "C:\Projects\FelysJewelryDesktop\Properties\AssemblyInfo.cs"
-    ///       --server https://localhost:5001/api
+    /// Publishes an application package using the version embedded in the compiled application.
+    /// The application AssemblyVersion is the single source of truth for the published package version.
     /// </summary>
     public static class Program {
-        private static readonly Regex AssemblyFileVersionPattern = new(@"\[assembly:\s*AssemblyFileVersion\(""([^""]+)""\)\]", RegexOptions.Compiled);
-
         private static readonly Regex AssemblyVersionPattern = new(@"\[assembly:\s*AssemblyVersion\(""([^""]+)""\)\]", RegexOptions.Compiled);
 
         public static async Task<int> Main(string[] args) {
             Dictionary<string, string> options;
             HashSet<string> flags;
+
             try {
-                (options, flags) = ParseArgs(args, booleanFlags: new[] { "publish", "mandatory" });
+                (options, flags) = ParseArgs(args, new[] { "publish", "mandatory" });
                 Require(options, "app");
                 Require(options, "bin-path");
                 Require(options, "server");
 
                 if (!options.ContainsKey("main-exe") && !options.ContainsKey("assembly-info")) {
-                    throw new ArgumentException("Provide either --main-exe (reads the built binary's version) " + "or --assembly-info (reads AssemblyInfo.cs directly).");
+                    throw new ArgumentException("Provide either --main-exe (reads AssemblyVersion from the compiled executable) or --assembly-info (reads AssemblyVersion.cs directly).");
                 }
             }
             catch (Exception ex) {
@@ -71,18 +46,21 @@ namespace VersionManagementSystem.PublishTool {
                 return 1;
             }
 
-            SemanticVersion version;
+            Version version;
             try {
-                version = options.ContainsKey("main-exe") ? ReadVersionFromBinary(Path.Combine(binPath, options["main-exe"])) : ReadVersionFromAssemblyInfo(options["assembly-info"]);
+                version = options.ContainsKey("main-exe")
+                    ? ReadVersionFromBinary(Path.Combine(binPath, options["main-exe"]))
+                    : ReadVersionFromAssemblyInfo(options["assembly-info"]);
             }
             catch (Exception ex) {
                 Console.Error.WriteLine($"Could not determine version: {ex.Message}");
                 return 1;
             }
 
-            Console.WriteLine($"Detected version: {version}");
+            var versionString = version.ToString(4);
+            Console.WriteLine($"Detected AssemblyVersion: {versionString}");
 
-            var zipPath = Path.Combine(Path.GetTempPath(), $"{applicationCode}_{version}.zip");
+            var zipPath = Path.Combine(Path.GetTempPath(), $"{applicationCode}_{versionString}.zip");
             if (File.Exists(zipPath)) {
                 File.Delete(zipPath);
             }
@@ -112,58 +90,53 @@ namespace VersionManagementSystem.PublishTool {
             }
         }
 
-        /// <summary>
-        /// Reads the version straight from the built binary's file-version metadata — this is
-        /// exactly what [assembly: AssemblyFileVersion("1.5.0.0")] in AssemblyInfo.cs compiles
-        /// into, so it's guaranteed to match what actually shipped in this release folder.
-        /// </summary>
-        private static SemanticVersion ReadVersionFromBinary(string exePath) {
+        private static Version ReadVersionFromBinary(string exePath) {
             if (!File.Exists(exePath)) {
                 throw new FileNotFoundException($"Main executable not found at '{exePath}'.");
             }
 
-            var info = FileVersionInfo.GetVersionInfo(exePath);
+            // AssemblyName reads the AssemblyVersion embedded in the compiled assembly.
+            // This is the value produced by [assembly: AssemblyVersion("...")].
+            var assemblyName = AssemblyName.GetAssemblyName(exePath);
+            var version = assemblyName.Version;
 
-            // AssemblyVersion/AssemblyFileVersion is Major.Minor.Build.Revision — the update
-            // system only tracks Major.Minor.Patch, so Build maps to Patch and Revision is dropped.
-            return new SemanticVersion(info.FileMajorPart, info.FileMinorPart, info.FileBuildPart);
+            if (version is null || version.Build < 0 || version.Revision < 0) {
+                throw new InvalidOperationException(
+                    $"The executable '{exePath}' does not contain a complete four-part AssemblyVersion. " +
+                    "Expected Major.Minor.Build.Revision, for example 2026.8.26.1.");
+            }
+
+            return version;
         }
 
-        /// <summary>
-        /// Parses AssemblyInfo.cs directly, for when you want to publish without building first.
-        /// Prefers AssemblyFileVersion; falls back to AssemblyVersion if that attribute isn't present.
-        /// </summary>
-        private static SemanticVersion ReadVersionFromAssemblyInfo(string assemblyInfoPath) {
+        private static Version ReadVersionFromAssemblyInfo(string assemblyInfoPath) {
             if (!File.Exists(assemblyInfoPath)) {
                 throw new FileNotFoundException($"AssemblyInfo.cs not found at '{assemblyInfoPath}'.");
             }
 
             var content = File.ReadAllText(assemblyInfoPath);
-
-            var match = AssemblyFileVersionPattern.Match(content);
-            if (!match.Success) {
-                match = AssemblyVersionPattern.Match(content);
-            }
+            var match = AssemblyVersionPattern.Match(content);
 
             if (!match.Success) {
-                throw new InvalidOperationException("No [assembly: AssemblyFileVersion(...)] or [assembly: AssemblyVersion(...)] attribute found.");
+                throw new InvalidOperationException(
+                    "No [assembly: AssemblyVersion(\"...\")] attribute was found in AssemblyInfo.cs.");
             }
 
-            var rawVersion = match.Groups[1].Value; // e.g. "1.5.0.0" or "1.5.*"
-            var parts = rawVersion.Split('.');
-
-            if (parts.Length < 2 || !int.TryParse(parts[0], out var major) || !int.TryParse(parts[1], out var minor)) {
-                throw new InvalidOperationException($"'{rawVersion}' could not be parsed into Major.Minor.Patch.");
+            var rawVersion = match.Groups[1].Value.Trim();
+            if (!Version.TryParse(rawVersion, out var version) || version is null || version.Build < 0 || version.Revision < 0) {
+                throw new InvalidOperationException(
+                    $"'{rawVersion}' is not a complete four-part .NET AssemblyVersion. " +
+                    "Expected Major.Minor.Build.Revision, for example 2026.8.26.1.");
             }
 
-            var patch = parts.Length >= 3 && int.TryParse(parts[2], out var parsedPatch) ? parsedPatch : 0;
-            return new SemanticVersion(major, minor, patch);
+            return version;
         }
 
-        private static async Task RegisterVersionAsync(HttpClient httpClient, string applicationCode, SemanticVersion version, Dictionary<string, string> options, HashSet<string> flags) {
+        private static async Task RegisterVersionAsync(HttpClient httpClient, string applicationCode, Version version, Dictionary<string, string> options, HashSet<string> flags) {
+            var versionString = version.ToString(4);
             var payload = new {
                 applicationCode,
-                version = version.ToString(),
+                version = versionString,
                 releaseType = options.GetValueOrDefault("release-type", "Minor"),
                 releaseDate = DateTime.UtcNow,
                 releaseNotes = options.GetValueOrDefault("release-notes"),
@@ -173,7 +146,7 @@ namespace VersionManagementSystem.PublishTool {
                 createdBy = options.GetValueOrDefault("created-by", Environment.UserName)
             };
 
-            Console.WriteLine($"Registering version {version}...");
+            Console.WriteLine($"Registering version {versionString}...");
             using var response = await httpClient.PostAsJsonAsync($"applications/{applicationCode}/versions", payload);
 
             if (response.IsSuccessStatusCode) {
@@ -181,18 +154,16 @@ namespace VersionManagementSystem.PublishTool {
             }
 
             var body = await response.Content.ReadAsStringAsync();
-
-            // The version may already exist from a previous run (e.g. re-uploading a package
-            // after a build failure) — that's fine, we just move on to the package upload.
             if (body.Contains("already exists", StringComparison.OrdinalIgnoreCase)) {
-                Console.WriteLine($"Version {version} is already registered — continuing.");
+                Console.WriteLine($"Version {versionString} is already registered — continuing.");
                 return;
             }
 
             throw new InvalidOperationException($"Failed to register version ({(int)response.StatusCode}): {body}");
         }
 
-        private static async Task UploadPackageAsync(HttpClient httpClient, string applicationCode, SemanticVersion version, string zipPath) {
+        private static async Task UploadPackageAsync(HttpClient httpClient, string applicationCode, Version version, string zipPath) {
+            var versionString = version.ToString(4);
             Console.WriteLine("Uploading package...");
 
             using var content = new MultipartFormDataContent();
@@ -201,11 +172,10 @@ namespace VersionManagementSystem.PublishTool {
             streamContent.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
             content.Add(streamContent, "file", Path.GetFileName(zipPath));
 
-            using var response = await httpClient.PostAsync($"applications/{applicationCode}/versions/{version}/package", content);
+            using var response = await httpClient.PostAsync($"applications/{applicationCode}/versions/{versionString}/package", content);
 
             if (!response.IsSuccessStatusCode) {
                 var body = await response.Content.ReadAsStringAsync();
-
                 if (body.Contains("already exists", StringComparison.OrdinalIgnoreCase)) {
                     Console.WriteLine("A package for this version/type already exists — skipping upload.");
                     return;
@@ -215,8 +185,9 @@ namespace VersionManagementSystem.PublishTool {
             }
         }
 
-        private static async Task AdvanceThroughWorkflowAsync(HttpClient httpClient, string applicationCode, SemanticVersion version) {
-            var basePath = $"applications/{applicationCode}/versions/{version}";
+        private static async Task AdvanceThroughWorkflowAsync(HttpClient httpClient, string applicationCode, Version version) {
+            var versionString = version.ToString(4);
+            var basePath = $"applications/{applicationCode}/versions/{versionString}";
 
             await PostWorkflowStepAsync(httpClient, $"{basePath}/submit-for-testing", "Submit for testing");
             await PostWorkflowStepAsync(httpClient, $"{basePath}/approve", "Approve");
@@ -229,8 +200,6 @@ namespace VersionManagementSystem.PublishTool {
 
             if (!response.IsSuccessStatusCode) {
                 var body = await response.Content.ReadAsStringAsync();
-
-                // Already past this step from a previous run (e.g. re-running --publish) — not fatal.
                 if (body.Contains("currently", StringComparison.OrdinalIgnoreCase)) {
                     Console.WriteLine($"{stepName} skipped: {body}");
                     return;
@@ -251,7 +220,6 @@ namespace VersionManagementSystem.PublishTool {
                 }
 
                 var key = token[2..];
-
                 if (Contains(booleanFlags, key)) {
                     flags.Add(key);
                     continue;
@@ -273,7 +241,6 @@ namespace VersionManagementSystem.PublishTool {
                     return true;
                 }
             }
-
             return false;
         }
 
@@ -288,7 +255,7 @@ namespace VersionManagementSystem.PublishTool {
             Console.Error.WriteLine("Usage: VersionManagementSystem.PublishTool.exe --app <code> --bin-path <folder>");
             Console.Error.WriteLine("  (--main-exe <exeFileName> | --assembly-info <path\\to\\AssemblyInfo.cs>)");
             Console.Error.WriteLine("  --server <apiBaseUrl>");
-            Console.Error.WriteLine("  [--release-type Minor] [--release-notes \"...\"] [--min-version 1.4.0]");
+            Console.Error.WriteLine("  [--release-type Minor] [--release-notes \"...\"] [--min-version 2026.8.26.1]");
             Console.Error.WriteLine("  [--channel Stable] [--mandatory] [--created-by name] [--publish]");
         }
     }

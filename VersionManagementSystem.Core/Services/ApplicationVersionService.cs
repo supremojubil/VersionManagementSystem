@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using VersionManagementSystem.Core.DTOs;
 using VersionManagementSystem.Core.Entities;
@@ -38,6 +37,7 @@ namespace VersionManagementSystem.Core.Services {
                 .OrderByDescending(c => c.Major)
                 .ThenByDescending(c => c.Minor)
                 .ThenByDescending(c => c.Patch)
+                .ThenByDescending(c => c.Revision)
                 .ToList();
 
             var result = new List<ApplicationVersionDTO>(ordered.Count);
@@ -61,22 +61,26 @@ namespace VersionManagementSystem.Core.Services {
 
         public async Task<ApplicationVersionDTO> CreateAsync(CreateApplicationVersionDTO request) {
             var application = await GetApplicationOrThrowAsync(request.ApplicationCode);
-
-            var semanticVersion = _versionService.Parse(request.Version);
+            var parsedVersion = _versionService.Parse(request.Version);
 
             if (!Enum.TryParse<ReleaseType>(request.ReleaseType, ignoreCase: true, out var releaseType)) {
                 throw new ValidationException($"'{request.ReleaseType}' is not a valid release type. Expected Major, Minor, Patch or Hotfix.");
             }
 
-            if (await _versionRepository.VersionExistsAsync(application.ApplicationId, semanticVersion.Major, semanticVersion.Minor, semanticVersion.Patch)) {
-                throw new ValidationException($"Version {semanticVersion} already exists for application '{application.ApplicationCode}'.");
+            if (await _versionRepository.VersionExistsAsync(
+                application.ApplicationId,
+                parsedVersion.Major,
+                parsedVersion.Minor,
+                parsedVersion.Build,
+                parsedVersion.Revision)) {
+                throw new ValidationException($"Version {parsedVersion.ToString(4)} already exists for application '{application.ApplicationCode}'.");
             }
 
             var latest = await _versionRepository.GetLatestAsync(application.ApplicationId);
             if (latest != null) {
-                var latestVersion = new Models.SemanticVersion(latest.Major, latest.Minor, latest.Patch);
-                if (!semanticVersion.IsNewerThan(latestVersion)) {
-                    throw new ValidationException($"New version {semanticVersion} must be newer than the current latest version {latestVersion}.");
+                var latestVersion = new Version(latest.Major, latest.Minor, latest.Patch, latest.Revision);
+                if (parsedVersion.CompareTo(latestVersion) <= 0) {
+                    throw new ValidationException($"New version {parsedVersion.ToString(4)} must be newer than the current latest version {latestVersion.ToString(4)}.");
                 }
             }
 
@@ -91,9 +95,10 @@ namespace VersionManagementSystem.Core.Services {
 
             var version = new ApplicationVersion {
                 ApplicationId = application.ApplicationId,
-                Major = semanticVersion.Major,
-                Minor = semanticVersion.Minor,
-                Patch = semanticVersion.Patch,
+                Major = parsedVersion.Major,
+                Minor = parsedVersion.Minor,
+                Patch = parsedVersion.Build,
+                Revision = parsedVersion.Revision,
                 ReleaseType = releaseType,
                 ReleaseStatus = ReleaseStatus.Draft,
                 ReleaseDate = request.ReleaseDate,

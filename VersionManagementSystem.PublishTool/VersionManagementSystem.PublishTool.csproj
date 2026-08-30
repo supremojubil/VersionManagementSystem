@@ -10,8 +10,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<!-- Only for the shared SemanticVersion type — this tool is a thin REST client, it never
-         touches Infrastructure/EF Core. -->
+		<!-- Core contains shared version contracts/validation; the Publish Tool does not reference Infrastructure/EF Core. -->
 		<ProjectReference Include="..\VersionManagementSystem.Core\VersionManagementSystem.Core.csproj" />
 	</ItemGroup>
 

@@ -7,7 +7,6 @@ using VersionManagementSystem.Core.Entities;
 using VersionManagementSystem.Core.Enums;
 using VersionManagementSystem.Core.Exceptions;
 using VersionManagementSystem.Core.Interfaces;
-using VersionManagementSystem.Core.Models;
 
 namespace VersionManagementSystem.Core.Services {
     public sealed class ReleaseService : IReleaseService {
@@ -133,14 +132,14 @@ namespace VersionManagementSystem.Core.Services {
                 throw new NotFoundException($"Application '{applicationCode}' was not found.");
             }
 
-            if (!SemanticVersion.TryParse(version, out var semanticVersion) || semanticVersion == null) {
-                throw new ValidationException($"'{version}' is not a valid version.");
+            if (!Version.TryParse(version, out var parsedVersion) || parsedVersion is null || parsedVersion.Build < 0 || parsedVersion.Revision < 0) {
+                throw new ValidationException($"'{version}' is not a valid .NET assembly version. Expected Major.Minor.Build.Revision (for example 2026.8.26.1).");
             }
 
-            var entity = await _versionRepository.GetByVersionAsync(application.ApplicationId, semanticVersion.Major, semanticVersion.Minor, semanticVersion.Patch);
+            var entity = await _versionRepository.GetByVersionAsync(application.ApplicationId, parsedVersion.Major, parsedVersion.Minor, parsedVersion.Build, parsedVersion.Revision);
 
             if (entity == null) {
-                throw new NotFoundException($"Version {semanticVersion} was not found for application '{applicationCode}'.");
+                throw new NotFoundException($"Version {parsedVersion.ToString(4)} was not found for application '{applicationCode}'.");
             }
 
             return entity;

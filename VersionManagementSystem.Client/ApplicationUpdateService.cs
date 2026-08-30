@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -16,7 +16,7 @@ namespace VersionManagementSystem.Client {
     /// Reusable update-check client for a single target application. Usage:
     ///
     ///   var updater = new ApplicationUpdateService("https://version-server/api", "FJ");
-    ///   var result = await updater.CheckForUpdateAsync("1.4.0");
+    ///   var result = await updater.CheckForUpdateAsync("2026.8.26.1");
     ///   if (result.UpdateAvailable) { ... }
     ///
     /// The target application never needs to know how versions are stored server-side —

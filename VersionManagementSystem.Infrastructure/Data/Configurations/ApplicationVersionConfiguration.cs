@@ -14,6 +14,7 @@ namespace VersionManagementSystem.Infrastructure.Data.Configurations {
             builder.Property(v => v.Major).IsRequired();
             builder.Property(v => v.Minor).IsRequired();
             builder.Property(v => v.Patch).IsRequired();
+            builder.Property(v => v.Revision).IsRequired();
 
             builder.Property(v => v.ReleaseType)
                 .IsRequired()
@@ -44,12 +45,13 @@ namespace VersionManagementSystem.Infrastructure.Data.Configurations {
                 .HasConversion<string>()
                 .HasMaxLength(20);
 
-            // One application cannot register the same MAJOR.MINOR.PATCH twice.
+            // One application cannot register the same Major.Minor.Build.Revision twice.
             builder.HasIndex(v => new { 
                 v.ApplicationId, 
                 v.Major,
                 v.Minor,
-                v.Patch 
+                v.Patch,
+                v.Revision
             }).IsUnique();
         }
     }
